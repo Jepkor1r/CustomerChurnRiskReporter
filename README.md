@@ -86,6 +86,8 @@ CloudWatch receives logs
 
 ## Repository Structure
 
+```text
+
 customer-churn-risk-reporter/
 │
 ├── .github/
@@ -193,6 +195,90 @@ customer-churn-risk-reporter/
 ├── Makefile
 ├── README.md
 └── requirements.txt
+```
+
+---
+## Database
+
+The project uses **PostgreSQL 16** to store SaaS customer records and support churn analysis.
+
+The database is designed to simulate a production customer database while remaining simple enough for local development and testing.
+
+### Users Table
+
+The `users` table stores:
+
+- UUID primary key
+- Full name
+- Unique email address
+- Account status
+- Last recorded activity
+- Account creation timestamp
+
+### Customer Status
+
+Each user belongs to one of three account states:
+
+- `active`
+- `suspended`
+- `cancelled`
+
+A database CHECK constraint ensures that only valid status values can be stored.
+
+### Churn Detection
+
+Customer churn is determined using a simple business rule:
+
+- Account status must be `active`
+- `last_activity` must not be NULL
+- Customer has been inactive for more than seven days
+
+This query forms the core business logic executed by AWS Lambda when generating the daily churn report.
+
+### Performance
+
+An index is created on the `last_activity` column to improve the performance of daily churn detection queries.
+
+---
+## Seed Data
+
+Two approaches are provided for populating the database.
+
+### Manual Seed Data
+
+`database/seed.sql`
+
+Provides a small set of deterministic customer records covering common business scenarios including:
+
+- Active customers
+- Churn-risk customers
+- Suspended accounts
+- Cancelled accounts
+- Newly registered users
+
+This dataset is useful for predictable demonstrations and testing.
+
+### Automatic Seeder
+
+`scripts/seed_database.py`
+
+A Python utility generates realistic customer records using the Faker library.
+
+Generated data includes:
+
+- Random customer names
+- Unique email addresses
+- Random account statuses
+- Random activity dates within the previous 90 days
+- Users with no recorded activity (NULL values)
+
+The number of generated users can be controlled from the command line.
+
+Example:
+
+```bash
+python scripts/seed_database.py --users 1000
+```
 
 ---
 

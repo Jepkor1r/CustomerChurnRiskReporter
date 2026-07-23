@@ -77,11 +77,21 @@ def generate_user():
 
     # Build a single user dictionary with fake but realistic data
     # last_activity is set to right now, meaning this user is currently active
+    
+    status = random.choices(
+        population=["active", "suspended", "cancelled"],
+        weights=[85, 10, 5],
+        k=1
+    )[0]
+
+    days_ago = random.randint(0, 90)
+    last_activity = datetime.now() - timedelta(days=days_ago)
+
     user = {
         "full_name": fake.name(),           # Random realistic full name
         "email": fake.unique.email(),        # Random unique email address
-        "account_status": "active",          # All generated users start as active
-        "last_activity": datetime.now()      # Activity set to current time
+        "account_status": status,          # All generated users
+        "last_activity":  last_activity    # Activity set to current time
     }
 
     return user

@@ -15,13 +15,25 @@ python scripts/seed_database.py --users 100
 =========================================================
 """
 
+# argparse lets us accept arguments from the command line (e.g. --users 100)
 import argparse
-import os
-import random
-from datetime import datetime, timedelta
 
+# os lets us read environment variables like DB_HOST, DB_USER, etc.
+import os
+
+# random lets us randomly assign account statuses and activity dates
+import random
+
+# datetime gives us the current time, timedelta lets us subtract days from it
+from datetime import datetime, timedelta,  UTC
+
+# psycopg is the library that connects Python to PostgreSQL
 import psycopg
+
+# load_dotenv reads the .env file and makes its values available via os.getenv()
 from dotenv import load_dotenv
+
+# Faker generates realistic fake names and email addresses
 from faker import Faker
 
 # Load environment variables from the .env file
@@ -77,21 +89,41 @@ def generate_user():
 
     # Build a single user dictionary with fake but realistic data
     # last_activity is set to right now, meaning this user is currently active
-    
+
+    # Randomly pick an account status using weighted probabilities
+    # 85% of users will be active, 10% suspended, 5% cancelled
+    # This reflects a realistic distribution in a real SaaS product
     status = random.choices(
         population=["active", "suspended", "cancelled"],
         weights=[85, 10, 5],
         k=1
     )[0]
 
+    # Pick a random number of days ago between 0 and 90
+    # This is used below if the user has activity
     days_ago = random.randint(0, 90)
-    last_activity = datetime.now() - timedelta(days=days_ago)
+
+    # Randomly decide if this user has any activity at all
+    # 90% chance they have activity, 10% chance they have never logged in (NULL)
+    has_activity = random.choices(
+        population=[True, False],
+        weights=[90, 10],
+        k=1
+    )[0]
+
+    # If the user has activity, calculate a random past date as their last login
+    # If not, set last_activity to None (they signed up but never logged in)
+    if has_activity:
+        days_ago = random.randint(0, 90)
+        last_activity = datetime.now( UTC) - timedelta(days=days_ago)
+    else:
+        last_activity = None
 
     user = {
         "full_name": fake.name(),           # Random realistic full name
         "email": fake.unique.email(),        # Random unique email address
-        "account_status": status,          # All generated users
-        "last_activity":  last_activity    # Activity set to current time
+        "account_status": status,            # Randomly assigned status
+        "last_activity":  last_activity      # Random past date or None
     }
 
     return user
@@ -124,9 +156,6 @@ def insert_user(connection, user):
             ),
         )
 
-    # Save the insert to the database permanently
-    connection.commit()
-
 def main():
     # Read the --users argument from the command line
     args = parse_arguments()
@@ -141,19 +170,31 @@ def main():
 
     # Connect to the database
     connection = connect_database()
+
     print("✓ Connected to PostgreSQL!")
 
-    # Loop and insert one user at a time until we reach the requested count
-    for i in range(args.users):
-        user = generate_user()
-        insert_user(connection, user)
+    try:
+        # Loop and generate one user at a time, inserting each into the database
+        for i in range(args.users):
+            user = generate_user()
+            insert_user(connection, user)
 
-    print(f"\n✓ Successfully inserted {args.users} users!")
+        # Save all inserts to the database in one go after the loop finishes
+        # If anything fails above, this line is never reached and nothing is saved
+        connection.commit()
 
-    # Always close the connection when done to free up database resources
-    connection.close()
+        print(f"\n✓ Successfully inserted {args.users} users!")
 
-    print("✓ Connection closed.")
+    except Exception as error:
+        # If anything goes wrong, undo all inserts so the database stays clean
+        connection.rollback()
+        print(f"\n❌ Database Error: {error}")
+
+    finally:
+        # Always close the connection whether the inserts succeeded or failed
+        # This frees up the database connection regardless of what happened
+        connection.close()
+        print("✓ Connection closed.")
 
 
 # Only run main() when this file is executed directly
